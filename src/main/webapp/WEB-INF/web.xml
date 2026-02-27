@@ -19,5 +19,19 @@
 		<welcome-file>jsp/homepage.jsp</welcome-file>
 	</welcome-file-list>
 
+	<!-- CNY->GBP rate monitor: starts the 6-hour scheduler on deploy -->
+	<listener>
+		<listener-class>monitor.RateMonitorListener</listener-class>
+	</listener>
+
+	<!-- Rate dashboard servlet -->
+	<servlet>
+		<servlet-name>ExchangeRateServlet</servlet-name>
+		<servlet-class>servlet.ExchangeRateServlet</servlet-class>
+	</servlet>
+	<servlet-mapping>
+		<servlet-name>ExchangeRateServlet</servlet-name>
+		<url-pattern>/exchange_rate</url-pattern>
+	</servlet-mapping>
 
 </web-app>
