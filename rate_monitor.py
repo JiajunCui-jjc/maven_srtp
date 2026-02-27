@@ -1,0 +1,86 @@
+#!/usr/bin/env python3
+"""
+CNY -> GBP Exchange Rate Monitor
+每 6 小时自动检查一次，变动超过 1% 时打印警报并记录到日志文件。
+用法:
+    python3 rate_monitor.py          # 前台运行
+    nohup python3 rate_monitor.py &  # 后台运行，关闭终端也不会停
+"""
+
+import urllib.request
+import json
+import time
+import os
+from datetime import datetime
+
+# ── 配置 ──────────────────────────────────────────────────────────────────────
+INTERVAL_HOURS   = 6          # 检查间隔（小时）
+ALERT_THRESHOLD  = 1.0        # 汇率变动超过此百分比时警报
+LOG_FILE         = os.path.join(os.path.dirname(__file__), "rate_history.log")
+API_URL          = "https://open.er-api.com/v6/latest/CNY"
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def fetch_rate() -> float:
+    """从免费 API 获取 1 CNY = ? GBP，失败返回 -1。"""
+    try:
+        with urllib.request.urlopen(API_URL, timeout=10) as resp:
+            data = json.loads(resp.read().decode())
+            return float(data["rates"]["GBP"])
+    except Exception as e:
+        print(f"[ERROR] 获取汇率失败: {e}")
+        return -1.0
+
+
+def log(msg: str):
+    """同时输出到终端和日志文件。"""
+    line = f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {msg}"
+    print(line)
+    with open(LOG_FILE, "a", encoding="utf-8") as f:
+        f.write(line + "\n")
+
+
+def run():
+    log("=" * 55)
+    log("CNY->GBP 汇率监控启动，每 6 小时检查一次")
+    log(f"日志文件: {LOG_FILE}")
+    log("=" * 55)
+
+    prev_rate = None
+
+    while True:
+        rate = fetch_rate()
+
+        if rate <= 0:
+            log("本次获取失败，等待下次检查...")
+        else:
+            msg = f"1 CNY = {rate:.6f} GBP"
+
+            # 计算变动并决定是否警报
+            if prev_rate is not None:
+                change_pct = (rate - prev_rate) / prev_rate * 100
+                direction  = "↑" if change_pct > 0 else "↓"
+                msg += f"  ({direction}{abs(change_pct):.3f}%)"
+
+                if abs(change_pct) >= ALERT_THRESHOLD:
+                    log("!" * 50)
+                    log(f"*** 警报 *** 汇率变动 {change_pct:+.3f}%")
+                    log(f"    上次: {prev_rate:.6f}  ->  本次: {rate:.6f}")
+                    log("!" * 50)
+
+            log(msg)
+            prev_rate = rate
+
+        # 等待下次检查
+        next_check = datetime.fromtimestamp(
+            time.time() + INTERVAL_HOURS * 3600
+        ).strftime("%Y-%m-%d %H:%M:%S")
+        log(f"下次检查时间: {next_check}")
+        time.sleep(INTERVAL_HOURS * 3600)
+
+
+if __name__ == "__main__":
+    try:
+        run()
+    except KeyboardInterrupt:
+        log("监控已手动停止。")
